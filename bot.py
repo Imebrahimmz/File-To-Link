@@ -17,9 +17,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class TelegramFileStreamer:
-    def __init__(self, file: File):
-        self.file = file
-        self.iterator = file.download(out=bytes())
+    def __init__(self, file_path: str):
+        self.response = requests.get(file_path, stream=True)
+        self.response.raise_for_status()
+        self.iterator = self.response.iter_content(chunk_size=8192)
 
     def read(self, chunk_size=None):
         try:
@@ -28,7 +29,7 @@ class TelegramFileStreamer:
             return b''
 
     def close(self):
-        pass
+        self.response.close()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Start command received")
@@ -44,20 +45,21 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             file = update.message.document
             filename = file.file_name
         elif update.message.photo:
-            file = update.message.photo[-1].get_file()
+            file = update.message.photo[-1]
             filename = "photo.jpg"
         else:
             await update.message.reply_text("❌ Unsupported file type")
             return
 
-        file_size = file.file_size
+        file_obj = await file.get_file()
+        file_size = file_obj.file_size
         logger.info(f"File size: {file_size} bytes")
 
         if file_size > MAX_FILE_SIZE:
             await update.message.reply_text("⚠️ File exceeds 2GB limit")
             return
 
-        streamer = TelegramFileStreamer(file)
+        streamer = TelegramFileStreamer(file_obj.file_path)
 
         files = {'file': (filename, streamer)}
         response = requests.post(API_UPLOAD_URL, files=files)
