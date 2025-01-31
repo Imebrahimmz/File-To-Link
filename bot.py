@@ -62,7 +62,14 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⚠️ File exceeds 2GB limit")
             return
 
-        file_obj = await file.get_file()
+        try:
+            file_obj = await file.get_file()
+            logger.info(f"File path: {file_obj.file_path}")
+        except Exception as e:
+            logger.error(f"Error getting file: {str(e)}")
+            await update.message.reply_text(f"⚠️ Error: {str(e)}")
+            return
+
         streamer = TelegramFileStreamer(file_obj.file_path)
 
         files = {'file': (filename, streamer)}
