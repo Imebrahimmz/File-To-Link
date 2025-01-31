@@ -45,12 +45,12 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             file = update.message.document
             filename = file.file_name
             file_size = file.file_size
-        elif update.message.photo:
-            file = update.message.photo[-1]
-            filename = "photo.jpg"
+        elif update.message.video:
+            file = update.message.video
+            filename = f"{file.file_name}.mp4"
             file_size = file.file_size
         else:
-            await update.message.reply_text("❌ Unsupported file type")
+            await update.message.reply_text("❌ Unsupported file type. Please send a document or video.")
             return
 
         logger.info(f"File name: {filename}")
@@ -104,7 +104,7 @@ if __name__ == "__main__":
 
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO, handle_file))
+    app.add_handler(MessageHandler(filters.Document.ALL | filters.VIDEO, handle_file))
 
     # Keep the bot running
     app.run_polling(poll_interval=1.0)
