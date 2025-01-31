@@ -65,11 +65,14 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if response.status_code == 200:
             result = response.json()
-            download_url = f"https://files.vc/d/dl?hash={result['debug_info']['hash']}"
-            await update.message.reply_text(
-                f"✅ Upload successful!\n"
-                f"🔗 Download link: {download_url}"
-            )
+            download_url = result.get("file_url")
+            if download_url:
+                await update.message.reply_text(
+                    f"✅ Upload successful!\n"
+                    f"🔗 Download link: {download_url}"
+                )
+            else:
+                await update.message.reply_text(f"❌ API Error: {result.get('message', 'Unknown error')}")
         else:
             await update.message.reply_text(f"❌ API Error: {response.text}")
 
