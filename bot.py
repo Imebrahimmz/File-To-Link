@@ -1,7 +1,7 @@
 import os
 import logging
 import requests
-from telegram import Update, File
+from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
 # Configuration
@@ -44,21 +44,25 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if update.message.document:
             file = update.message.document
             filename = file.file_name
+            file_size = file.file_size
         elif update.message.photo:
             file = update.message.photo[-1]
             filename = "photo.jpg"
+            file_size = file.file_size
         else:
             await update.message.reply_text("❌ Unsupported file type")
             return
 
-        file_obj = await file.get_file()
-        file_size = file_obj.file_size
+        logger.info(f"File name: {filename}")
         logger.info(f"File size: {file_size} bytes")
+        logger.info(f"Max file size: {MAX_FILE_SIZE} bytes")
 
         if file_size > MAX_FILE_SIZE:
+            logger.error(f"File size {file_size} bytes exceeds the maximum limit of {MAX_FILE_SIZE} bytes")
             await update.message.reply_text("⚠️ File exceeds 2GB limit")
             return
 
+        file_obj = await file.get_file()
         streamer = TelegramFileStreamer(file_obj.file_path)
 
         files = {'file': (filename, streamer)}
