@@ -11,11 +11,11 @@ from telegram.ext import (
 )
 
 # Configuration
-TELEGRAM_TOKEN = "7820471600:AAHz_4zXFykyefwA8BiX9fYxIWe24AeePxQ"  # Your token
-API_UPLOAD_URL = "https://api.files.vc/upload"  # Your API endpoint
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")  # From GitHub Secrets
+API_UPLOAD_URL = "https://api.files.vc/upload"
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB limit
 
-# Set up logging
+# Configure logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -39,14 +39,14 @@ class TelegramFileStreamer:
         self.response.close()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Welcome message handler"""
+    """Send welcome message"""
     await update.message.reply_text(
         "📤 Send me any file (document or photo) to upload!\n"
         "Max size: 50MB"
     )
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle file uploads"""
+    """Handle file uploads to API"""
     streamer = None
     try:
         # Get file metadata
@@ -72,33 +72,46 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Prepare upload
         files = {'file': (filename, streamer)}
         
-        # Add custom headers if needed
-        headers = {
-            # "Authorization": "Bearer YOUR_API_KEY"  # Uncomment if needed
-        }
-        
-        # Upload to API
+        # Send to API with enhanced logging
         response = requests.post(
             API_UPLOAD_URL,
             files=files,
-            headers=headers
+            timeout=10  # Add timeout for reliability
         )
         
-        if response.status_code == 200:
-            await update.message.reply_text("✅ Upload successful!")
+        # Log API response details
+        logger.info(f"API Status Code: {response.status_code}")
+        logger.info(f"API Response: {response.text}")
+
+        # Handle API response
+        if response.status_code in (200, 201):  # Accept both success codes
+            await update.message.reply_text("✅ File uploaded successfully!")
+            # Optional: Send file URL from response
+            # result = response.json()
+            # await update.message.reply_text(f"URL: {result['file_url']}")
         else:
-            await update.message.reply_text(f"❌ API Error: {response.text}")
+            await update.message.reply_text(
+                f"❌ API Error ({response.status_code}): {response.text[:200]}"
+            )
 
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        await update.message.reply_text(f"⚠️ Error: {str(e)}")
+        logger.error(f"Critical Error: {str(e)}", exc_info=True)
+        await update.message.reply_text(f"⚠️ System Error: {str(e)}")
         
     finally:
         if streamer:
             streamer.close()
 
 if __name__ == "__main__":
+    # Validate environment setup
+    if not TELEGRAM_TOKEN:
+        logger.error("TELEGRAM_TOKEN environment variable not set!")
+        exit(1)
+        
+    # Initialize and run bot
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO, handle_file))
+    
+    logger.info("Bot is starting...")
     app.run_polling()
