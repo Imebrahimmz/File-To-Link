@@ -5,7 +5,7 @@ on:
     - cron: "*/5 * * * *"
 
 jobs:
-  run-bot:  # This is the job name you need to look for
+  run-bot:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,4 +16,6 @@ jobs:
       - name: Install dependencies
         run: pip install python-telegram-bot requests
       - name: Run bot
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
         run: python3 bot.py
