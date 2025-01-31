@@ -11,9 +11,10 @@ from telegram.ext import (
 )
 
 # Configuration
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")  # From GitHub Secrets
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 API_UPLOAD_URL = "https://api.files.vc/upload"
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB limit
+DOWNLOAD_BASE_URL = "https://files.vc/d/dl?hash="
+MAX_FILE_SIZE = 50 * 1024 * 1024
 
 # Configure logging
 logging.basicConfig(
@@ -23,7 +24,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class TelegramFileStreamer:
-    """Stream files directly from Telegram's servers"""
     def __init__(self, file_url):
         self.response = requests.get(file_url, stream=True)
         self.response.raise_for_status()
@@ -39,17 +39,15 @@ class TelegramFileStreamer:
         self.response.close()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Send welcome message"""
     await update.message.reply_text(
-        "📤 Send me any file (document or photo) to upload!\n"
+        "📤 Send me any file to get a download link!\n"
         "Max size: 50MB"
     )
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle file uploads to API"""
     streamer = None
     try:
-        # Get file metadata
+        # File type handling
         if update.message.document:
             file = update.message.document
             filename = file.file_name
@@ -60,58 +58,54 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Unsupported file type")
             return
 
-        # Check file size
+        # Size check
         if file.file_size > MAX_FILE_SIZE:
             await update.message.reply_text("⚠️ File exceeds 50MB limit")
             return
 
-        # Get direct file URL
+        # Get file stream
         file_obj = await file.get_file()
         streamer = TelegramFileStreamer(file_obj.file_path)
 
-        # Prepare upload
+        # Upload to API
         files = {'file': (filename, streamer)}
+        response = requests.post(API_UPLOAD_URL, files=files)
+        response.raise_for_status()  # Will trigger except for 4xx/5xx errors
+
+        # Parse response
+        result = response.json()
+        if 'hash' not in result.get('debug_info', {}):
+            raise ValueError("Missing hash in API response")
         
-        # Send to API with enhanced logging
-        response = requests.post(
-            API_UPLOAD_URL,
-            files=files,
-            timeout=10  # Add timeout for reliability
+        # Build download link
+        file_hash = result['debug_info']['hash']
+        download_url = f"{DOWNLOAD_BASE_URL}{file_hash}"
+        
+        # Send success message with link
+        await update.message.reply_text(
+            f"✅ Upload successful!\n"
+            f"🔗 Download link: {download_url}"
         )
+
+    except requests.exceptions.HTTPError as e:
+        error_msg = f"API Error ({e.response.status_code}): {e.response.text[:200]}"
+        logger.error(error_msg)
+        await update.message.reply_text(error_msg)
         
-        # Log API response details
-        logger.info(f"API Status Code: {response.status_code}")
-        logger.info(f"API Response: {response.text}")
-
-        # Handle API response
-        if response.status_code in (200, 201):  # Accept both success codes
-            await update.message.reply_text("✅ File uploaded successfully!")
-            # Optional: Send file URL from response
-            # result = response.json()
-            # await update.message.reply_text(f"URL: {result['file_url']}")
-        else:
-            await update.message.reply_text(
-                f"❌ API Error ({response.status_code}): {response.text[:200]}"
-            )
-
     except Exception as e:
-        logger.error(f"Critical Error: {str(e)}", exc_info=True)
-        await update.message.reply_text(f"⚠️ System Error: {str(e)}")
+        logger.error(f"Error: {str(e)}", exc_info=True)
+        await update.message.reply_text(f"⚠️ Error: {str(e)}")
         
     finally:
         if streamer:
             streamer.close()
 
 if __name__ == "__main__":
-    # Validate environment setup
     if not TELEGRAM_TOKEN:
-        logger.error("TELEGRAM_TOKEN environment variable not set!")
+        logger.error("Missing TELEGRAM_TOKEN environment variable!")
         exit(1)
         
-    # Initialize and run bot
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO, handle_file))
-    
-    logger.info("Bot is starting...")
     app.run_polling()
