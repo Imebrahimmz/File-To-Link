@@ -7,7 +7,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Messa
 # Configuration
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 API_UPLOAD_URL = "https://api.files.vc/upload"
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024  # 2GB
 
 # Logging setup
 logging.basicConfig(
@@ -35,7 +35,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Start command received")
     await update.message.reply_text(
         "📤 Send me any file to get a download link!\n"
-        "Max size: 50MB"
+        "Max size: 2GB"
     )
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -52,7 +52,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if file.file_size > MAX_FILE_SIZE:
-            await update.message.reply_text("⚠️ File exceeds 50MB limit")
+            await update.message.reply_text("⚠️ File exceeds 2GB limit")
             return
 
         file_obj = await file.get_file()
