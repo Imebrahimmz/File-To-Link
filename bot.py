@@ -78,8 +78,9 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if response.status_code == 200:
             result = response.json()
-            if "file_url" in result:
-                download_url = result["file_url"]
+            if "debug_info" in result and "hash" in result["debug_info"]:
+                file_hash = result["debug_info"]["hash"]
+                download_url = f"https://files.vc/d/dl?hash={file_hash}"
                 await update.message.reply_text(
                     f"✅ Upload successful!\n"
                     f"🔗 Download link: {download_url}"
