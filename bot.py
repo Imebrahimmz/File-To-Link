@@ -88,8 +88,8 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if response.status_code == 200:
             result = response.json()
-            download_url = result.get("file_url")
-            if download_url:
+            if "file_url" in result:
+                download_url = result["file_url"]
                 await update.message.reply_text(
                     f"✅ Upload successful!\n"
                     f"🔗 Download link: {download_url}"
