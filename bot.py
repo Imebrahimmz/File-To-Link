@@ -7,6 +7,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Messa
 # Configuration
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 API_UPLOAD_URL = "https://api.files.vc/upload"
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
 
 # Logging setup
 logging.basicConfig(
@@ -38,7 +39,9 @@ class TelegramFileStreamer:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Start command received")
     await update.message.reply_text(
-        "📤 Send me any file to get a download link!"
+        "📤 Send me any file to get a download link!\n"
+        "Note: This bot can only handle files up to 20MB due to Telegram Bot API limitations.\n"
+        "Created by @Imebrahim"
     )
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -46,21 +49,30 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if update.message.document:
             file = update.message.document
             filename = file.file_name
+            file_size = file.file_size
             file_id = file.file_id
         elif update.message.video:
             file = update.message.video
             filename = f"{file.file_name}.mp4"
+            file_size = file.file_size
             file_id = file.file_id
         elif update.message.photo:
             file = update.message.photo[-1]
             filename = f"{update.message.caption or 'photo'}.jpg"
+            file_size = file.file_size
             file_id = file.file_id
         else:
             await update.message.reply_text("❌ Unsupported file type. Please send a document, video, or photo.")
             return
 
         logger.info(f"File name: {filename}")
-        logger.info(f"File ID: {file_id}")
+        logger.info(f"File size: {file_size} bytes")
+        logger.info(f"Max file size: {MAX_FILE_SIZE} bytes")
+
+        if file_size > MAX_FILE_SIZE:
+            logger.error(f"File size {file_size} bytes exceeds the maximum limit of {MAX_FILE_SIZE} bytes")
+            await update.message.reply_text("⚠️ File exceeds 20MB limit. Please send a smaller file.")
+            return
 
         # Store the file_id for later use
         context.user_data['file_id'] = file_id
