@@ -1,13 +1,12 @@
 import os
 import logging
 import requests
-from telegram import Update
+from telegram import Update, File
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
 # Configuration
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 API_UPLOAD_URL = "https://api.files.vc/upload"
-MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024  # 2GB
 
 # Logging setup
 logging.basicConfig(
@@ -39,45 +38,36 @@ class TelegramFileStreamer:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Start command received")
     await update.message.reply_text(
-        "📤 Send me any file to get a download link!\n"
-        "Max size: 2GB"
+        "📤 Send me any file to get a download link!"
     )
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    streamer = None
     try:
         if update.message.document:
             file = update.message.document
             filename = file.file_name
-            file_size = file.file_size
+            file_id = file.file_id
         elif update.message.video:
             file = update.message.video
             filename = f"{file.file_name}.mp4"
-            file_size = file.file_size
+            file_id = file.file_id
         elif update.message.photo:
             file = update.message.photo[-1]
             filename = f"{update.message.caption or 'photo'}.jpg"
-            file_size = file.file_size
+            file_id = file.file_id
         else:
             await update.message.reply_text("❌ Unsupported file type. Please send a document, video, or photo.")
             return
 
         logger.info(f"File name: {filename}")
-        logger.info(f"File size: {file_size} bytes")
-        logger.info(f"Max file size: {MAX_FILE_SIZE} bytes")
+        logger.info(f"File ID: {file_id}")
 
-        if file_size > MAX_FILE_SIZE:
-            logger.error(f"File size {file_size} bytes exceeds the maximum limit of {MAX_FILE_SIZE} bytes")
-            await update.message.reply_text("⚠️ File exceeds 2GB limit")
-            return
+        # Store the file_id for later use
+        context.user_data['file_id'] = file_id
 
-        try:
-            file_obj = await file.get_file()
-            logger.info(f"File path: {file_obj.file_path}")
-        except Exception as e:
-            logger.error(f"Error getting file: {str(e)}")
-            await update.message.reply_text(f"⚠️ Error: {str(e)}")
-            return
+        # Use the file_id to get the file path
+        file_obj = await context.bot.get_file(file_id)
+        logger.info(f"File path: {file_obj.file_path}")
 
         streamer = TelegramFileStreamer(file_obj.file_path)
 
@@ -102,9 +92,6 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error: {str(e)}")
         await update.message.reply_text(f"⚠️ Error: {str(e)}")
-    finally:
-        if streamer:
-            streamer.close()
 
 if __name__ == "__main__":
     if not TELEGRAM_TOKEN:
