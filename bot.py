@@ -21,10 +21,15 @@ class TelegramFileStreamer:
         self.response = requests.get(file_path, stream=True)
         self.response.raise_for_status()
         self.iterator = self.response.iter_content(chunk_size=8192)
+        self.total_size = int(self.response.headers.get('content-length', 0))
+        self.uploaded_size = 0
 
     def read(self, chunk_size=None):
         try:
-            return next(self.iterator)
+            chunk = next(self.iterator)
+            self.uploaded_size += len(chunk)
+            logger.info(f"Uploaded {self.uploaded_size} of {self.total_size} bytes")
+            return chunk
         except StopIteration:
             return b''
 
@@ -49,8 +54,12 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             file = update.message.video
             filename = f"{file.file_name}.mp4"
             file_size = file.file_size
+        elif update.message.photo:
+            file = update.message.photo[-1]
+            filename = f"{update.message.caption or 'photo'}.jpg"
+            file_size = file.file_size
         else:
-            await update.message.reply_text("❌ Unsupported file type. Please send a document or video.")
+            await update.message.reply_text("❌ Unsupported file type. Please send a document, video, or photo.")
             return
 
         logger.info(f"File name: {filename}")
@@ -104,7 +113,7 @@ if __name__ == "__main__":
 
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.Document.ALL | filters.VIDEO, handle_file))
+    app.add_handler(MessageHandler(filters.Document.ALL | filters.VIDEO | filters.PHOTO, handle_file))
 
     # Keep the bot running
     app.run_polling(poll_interval=1.0)
